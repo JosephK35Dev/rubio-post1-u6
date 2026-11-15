@@ -60,4 +60,43 @@ Para un bucle cuyo contador está en CX, el estudiante mantendría `LOOP` cuando
 - Intel Corporation. (1979). *The 8086 family user's manual*. Las tablas 2-20 y 2-21 documentan los tiempos de cálculo de dirección efectiva y los ciclos de `LOOP`, saltos condicionales e instrucciones de registro. [Manual de Intel, PDF](https://bitsavers.org/components/intel/8086/9800722-03_The_8086_Family_Users_Manual_Oct79.pdf).
 - NASM. (s. f.). *The Netwide Assembler documentation*. [Documentación oficial de NASM](https://www.nasm.us/doc/).
 
+## Parte 2 — Modos de direccionamiento
+
+El programa `src/lab6_modos.asm` usa el mismo array y registro de datos con distintos modos, además de un marco de pila y una matriz 3×3. `bin/lab6_modos.com` es el ejecutable y `bin/lab6_modos.lst` muestra sus direcciones y codificaciones. El volcado de `array` se solicitó desde DS:0102; la versión de DEBUG alinea la línea de `D` a 0100 y deja sin bytes visibles los dos offsets anteriores al comienzo solicitado. Desde 0102 se observan los words little-endian `000A, 0014, 001E, 0028, 0032`.
+
+### Resumen de direccionamiento y valores
+
+| Modo / uso | Fórmula de dirección efectiva | Instrucción | Valor observado en DEBUG |
+|---|---|---|---|
+| Inmediato | El dato forma parte del flujo de instrucción | `MOV AX,100` | `AX=0064`. |
+| Directo | `EA = desplazamiento fijo` | `MOV AX,[var_x]` | Carga `FFFF` antes de la escritura directa de cero; `MOV BX,[array]` carga 10. |
+| Indirecto por registro | `EA = SI` | `MOV AX,[SI]` / `MOV BX,[SI]` | Carga nota1=85 y nota2=73; su suma es 158 y el promedio entero es 79. `D 0110 0111` confirma `4F 00` almacenado en `promedio`. |
+| Indexado | `EA = BX + SI` | `MOV AX,[BX+SI]` | El desplazamiento SI=4 selecciona `array[2]`, cuyo valor es 30. |
+| Array en orden directo | `EA = inicio_array + SI`, SI avanza 2 bytes | `ADD AX,[BX+SI]` | Al terminar `AX=0096` (150 decimal), `CX=0000`. |
+| Array en orden inverso | `EA = inicio_array + SI`, SI inicia en 8 y retrocede 2 bytes | `ADD AX,[BX+SI]` | Al terminar también `AX=0096` (150 decimal). |
+| Variables locales BP | `EA = BP − desplazamiento`, segmento SS | `MOV AX,[BP−2]`; `ADD AX,[BP−4]` | BP=`FFFC`, SP=`FFF8`; SS:FFF8 contiene `FA 00` (250) y SS:FFFA contiene `63 00` (99). AX termina en `015D` (349). |
+| Matriz 3×3 de words | `EA = base + ((fila×3)+columna)×2` | `MOV DX,[BX+SI]` | Para fila 1, columna 2: SI=`000A`, elemento 6 y `DX=0006`. |
+
+Las lecturas y recorridos anteriores aparecen en `capturas/p2_cp1_volcado_array.png`, `capturas/p2_cp2_indirecto_promedio.png`, `capturas/p2_cp2b_promedio_memoria_79.png`, `capturas/p2_cp3_suma_array_150.png`, `capturas/p2_cp4_marco_bp.png` y `capturas/p2_cp5_matriz_dx6.png`.
+
+### Decisión técnica 3 — Direccionamiento directo frente a indexado
+
+Para leer una variable ubicada siempre en la misma dirección, el estudiante elegiría el direccionamiento directo, como `MOV AX,[var_x]`: el desplazamiento está codificado en la instrucción y no hace falta preparar registros base e índice antes de cada acceso. En un 8086, la tabla de cálculo de dirección efectiva del manual Intel asigna 6 ciclos a un desplazamiento directo y 7 ciclos a la suma base+índice; el acceso al dato por el bus sigue siendo necesario en ambos casos, por lo que no se debe interpretar esa diferencia de un ciclo como una reducción del costo completo de la lectura. En cambio, para un elemento que cambia en tiempo de ejecución, como `array[i]`, el indexado con `BX+SI` permite variar la posición sin escribir una instrucción distinta por elemento. El programa demuestra ambas situaciones: el desplazamiento directo carga `var_x`, mientras que el bucle cambia SI y suma todos los words del array. Por tanto, la elección depende de si la posición es fija o calculada dinámicamente; en procesadores posteriores también debe considerarse el modelo de ejecución concreto, no extrapolar literalmente los ciclos del 8086.
+
+### Decisión técnica 4 — BP frente a BX/SI y el segmento por defecto
+
+El estudiante reservaría BP para acceder a parámetros y variables locales de un marco de pila, mientras usaría BX, SI o DI para recorrer datos en DS. La arquitectura x86 asigna SS como segmento por defecto para una dirección basada en BP; para BX o SI, el segmento predeterminado suele ser DS. En este laboratorio ambos segmentos tienen el mismo valor porque el programa es `.COM`, así que `SS:BP−2` y una dirección equivalente en DS pueden apuntar al mismo segmento físico. Esa coincidencia no se conserva necesariamente en un `.EXE`, donde DS y SS suelen describir áreas distintas: usar BX donde se esperaba una variable local puede leer datos globales por error, y usar BP para un buffer en DS puede consultar la pila. Si se necesita expresamente que una operación con BP consulte DS, el ensamblador debe codificar un prefijo de sobrescritura de segmento, por ejemplo `MOV AX,[DS:BP+2]`. Para el marco mostrado, mantener SS por defecto hace explícito que los valores 99 y 250 pertenecen a la pila y evita una sobrescritura innecesaria.
+
+### Capturas de la Parte 2
+
+- Volcado del array: `capturas/p2_cp1_volcado_array.png`.
+- Trazado indirecto y promedio guardado: `capturas/p2_cp2_indirecto_promedio.png` y `capturas/p2_cp2b_promedio_memoria_79.png`.
+- Suma en ambos sentidos: `capturas/p2_cp3_suma_array_150.png`.
+- Marco de pila y valores locales: `capturas/p2_cp4_marco_bp.png`.
+- Dirección de matriz y resultado: `capturas/p2_cp5_matriz_dx6.png`.
+
+## Fuentes técnicas adicionales
+
+- Intel Corporation. (1979). *The 8086 family user's manual* (secciones 2.8, tablas 2-20 y 2-21). Describe direccionamiento, cálculo de EA, segmentos por defecto, ciclos y banderas de las instrucciones. [Manual de Intel, PDF](https://bitsavers.org/components/intel/8086/9800722-03_The_8086_Family_Users_Manual_Oct79.pdf).
+
 
