@@ -1,0 +1,114 @@
+     1                                  ; lab6_modos.asm — demostración de modos de direccionamiento x86 de 16 bits
+     2                                  ; Ensamble DOSBox: NASM -f bin SRC\LAB6_MODOS.ASM -o BIN\LAB6_MODOS.COM
+     3                                  
+     4                                  BITS 16
+     5                                  ORG 100h
+     6                                  
+     7 00000000 EB24                        jmp inicio
+     8                                  
+     9                                  ; Datos contiguos para inspeccionar con DEBUG y NASM -l.
+    10 00000002 0A0014001E00280032-     array       dw 10, 20, 30, 40, 50
+    10 0000000B 00                 
+    11 0000000C 5500                    nota1       dw 85
+    12 0000000E 4900                    nota2       dw 73
+    13 00000010 0000                    promedio    dw 0
+    14 00000012 FFFF                    var_x       dw 0FFFFh
+    15 00000014 010002000300            matriz      dw 1, 2, 3
+    16 0000001A 040005000600                        dw 4, 5, 6
+    17 00000020 070008000900                        dw 7, 8, 9
+    18                                  
+    19                                  inicio:
+    20                                  ; MODO 1 — inmediato: la constante está dentro de la instrucción.
+    21                                  modo_inmediato:
+    22 00000026 B86400                      mov ax, 100               ; inmediato decimal (0064h)
+    23 00000029 BBA500                      mov bx, 0A5h
+    24 0000002C 31C9                        xor cx, cx
+    25 0000002E 83C137                      add cx, 55
+    26 00000031 BAFFFF                      mov dx, 0FFFFh
+    27 00000034 81E2FF00                    and dx, 00FFh
+    28                                  
+    29                                  ; MODO 2 — directo: la instrucción contiene el desplazamiento fijo.
+    30                                  modo_directo:
+    31 00000038 A1[1200]                    mov ax, [var_x]           ; AX=FFFFh
+    32 0000003B 8B1E[0200]                  mov bx, [array]           ; BX=10
+    33 0000003F 8B0E[0C00]                  mov cx, [nota1]           ; CX=85
+    34 00000043 C706[1200]0000              mov word [var_x], 0       ; forma NASM válida: tamaño antes del operando
+    35                                  
+    36                                  ; MODO 3 — indirecto por registro: SI contiene el desplazamiento.
+    37                                  modo_indirecto:
+    38 00000049 BE[0C00]                    mov si, nota1             ; SI = dirección de nota1
+    39 0000004C 8B04                        mov ax, [si]              ; AX = 85
+    40 0000004E BE[0E00]                    mov si, nota2
+    41 00000051 8B1C                        mov bx, [si]              ; BX = 73
+    42 00000053 01D8                        add ax, bx                ; 158
+    43 00000055 D1E8                        shr ax, 1                 ; promedio entero = 79
+    44 00000057 BE[1000]                    mov si, promedio
+    45 0000005A 8904                        mov [si], ax              ; almacenar el promedio mediante puntero
+    46                                  fin_indirecto:
+    47                                  
+    48                                  ; MODO 4 — indexado: dirección efectiva = BX + SI.
+    49                                  modo_indexado:
+    50 0000005C BB[0200]                    mov bx, array
+    51 0000005F BE0400                      mov si, 4                 ; 2.º índice (array[2]) × 2 bytes
+    52 00000062 8B00                        mov ax, [bx + si]         ; AX=30
+    53                                  
+    54                                  ; Recorrido en orden directo: AX=150 decimal (0096h).
+    55                                  bucle_array:
+    56 00000064 31C0                        xor ax, ax
+    57 00000066 BB[0200]                    mov bx, array
+    58 00000069 B90500                      mov cx, 5
+    59 0000006C 31F6                        xor si, si
+    60                                  .suma:
+    61 0000006E 0300                        add ax, [bx + si]
+    62 00000070 83C602                      add si, 2
+    63 00000073 E2F9                        loop .suma
+    64                                  fin_bucle_array:
+    65                                  
+    66                                  ; Extensión: el mismo array, recorrido inverso, también suma 150.
+    67                                  bucle_inverso:
+    68 00000075 31C0                        xor ax, ax
+    69 00000077 BB[0200]                    mov bx, array
+    70 0000007A BE0800                      mov si, 8                 ; último word: 4 × 2 bytes
+    71 0000007D B90500                      mov cx, 5
+    72                                  .suma_inversa:
+    73 00000080 0300                        add ax, [bx + si]
+    74 00000082 83EE02                      sub si, 2
+    75 00000085 E2F9                        loop .suma_inversa
+    76                                  fin_bucle_inverso:
+    77                                  
+    78                                  ; Tres campos contiguos: base de nota1 más desplazamientos 0,2,4.
+    79                                  campos_registro:
+    80 00000087 BB[0C00]                    mov bx, nota1
+    81 0000008A 8B07                        mov ax, [bx]              ; nota1=85
+    82 0000008C 8B4F02                      mov cx, [bx + 2]          ; nota2=73
+    83 0000008F 8B5704                      mov dx, [bx + 4]          ; promedio=79
+    84                                  
+    85                                  ; MODO 3b — BP accede por defecto al segmento SS; se reservan dos locales.
+    86                                  marco_bp:
+    87 00000092 55                          push bp
+    88 00000093 89E5                        mov bp, sp
+    89 00000095 83EC04                      sub sp, 4                 ; dos palabras locales
+    90 00000098 C746FE6300                  mov word [bp - 2], 99     ; local_1 (63 00)
+    91 0000009D C746FCFA00                  mov word [bp - 4], 250    ; local_2 (FA 00)
+    92 000000A2 8B46FE                      mov ax, [bp - 2]
+    93 000000A5 0346FC                      add ax, [bp - 4]           ; AX=349 (015Dh)
+    94                                  fin_suma_bp:
+    95 000000A8 89EC                        mov sp, bp
+    96 000000AA 5D                          pop bp
+    97                                  fin_marco_bp:
+    98                                  
+    99                                  ; Matriz 3x3 de words: matriz[1][2] = 6.
+   100                                  acceso_matriz:
+   101 000000AB B80100                      mov ax, 1                 ; fila
+   102 000000AE BB0300                      mov bx, 3                 ; columnas por fila
+   103 000000B1 F7E3                        mul bx                    ; AX = fila × columnas = 3
+   104 000000B3 D1E0                        shl ax, 1                 ; desplazamiento de fila en bytes = 6
+   105 000000B5 89C6                        mov si, ax
+   106 000000B7 B90200                      mov cx, 2                 ; columna
+   107 000000BA D1E1                        shl cx, 1                 ; desplazamiento de columna en bytes = 4
+   108 000000BC 01CE                        add si, cx                ; SI = 10 (000Ah)
+   109 000000BE BB[1400]                    mov bx, matriz
+   110                                  carga_matriz:
+   111 000000C1 8B10                        mov dx, [bx + si]         ; DX=6
+   112                                  fin_matriz:
+   113 000000C3 CD20                        int 20h
