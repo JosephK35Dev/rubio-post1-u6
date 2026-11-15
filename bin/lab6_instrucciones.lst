@@ -1,0 +1,112 @@
+     1                                  ; lab6_instrucciones.asm — categorías de instrucciones x86 de 16 bits
+     2                                  ; Ensamble DOSBox: NASM -f bin SRC\LAB6_INSTRUCCIONES.ASM -o BIN\LAB6_INSTRUCCIONES.COM
+     3                                  ; Formato COM: CS, DS, ES y SS comparten el segmento; entrada en 0100h.
+     4                                  
+     5                                  BITS 16
+     6                                  ORG 100h
+     7                                  
+     8 00000000 EB07                        jmp inicio                 ; saltar sobre los datos
+     9                                  
+    10 00000002 2D00                    valor_a   dw 45
+    11 00000004 0C00                    valor_b   dw 12
+    12 00000006 0000                    resultado dw 0
+    13 00000008 0F                      mascara   db 0Fh
+    14                                  
+    15                                  inicio:
+    16                                  ; BLOQUE 1 — transferencia de datos
+    17 00000009 A1[0200]                    mov ax, [valor_a]          ; AX = 45
+    18 0000000C 8B1E[0400]                  mov bx, [valor_b]          ; BX = 12
+    19 00000010 89C1                        mov cx, ax                 ; copia entre registros
+    20 00000012 89DA                        mov dx, bx
+    21 00000014 8D36[0200]                  lea si, [valor_a]           ; SI recibe la dirección, no el contenido
+    22 00000018 8B04                        mov ax, [si]               ; direccionamiento indirecto: AX = 45
+    23 0000001A 87D1                        xchg cx, dx                ; intercambio temporal
+    24 0000001C 87D1                        xchg cx, dx                ; restaurar CX=45, DX=12
+    25 0000001E 50                          push ax                    ; preservar AX
+    26 0000001F B8FFFF                      mov ax, 0FFFFh
+    27 00000022 58                          pop ax                     ; recuperar AX=45
+    28                                  
+    29                                  ; BLOQUE 2 — aritmética y observación de flags
+    30 00000023 A1[0200]                    mov ax, [valor_a]
+    31                                  prueba_add:
+    32 00000026 0306[0400]                  add ax, [valor_b]          ; AX = 57; ZF=0, CF=0, OF=0
+    33 0000002A A3[0600]                    mov [resultado], ax
+    34                                  
+    35 0000002D A1[0400]                    mov ax, [valor_b]
+    36                                  prueba_sub:
+    37 00000030 2B06[0200]                  sub ax, [valor_a]          ; AX = FFDFh (-33 con signo)
+    38                                  
+    39 00000034 A1[0200]                    mov ax, [valor_a]
+    40 00000037 40                          inc ax                     ; 46
+    41 00000038 48                          dec ax                     ; 45
+    42                                  
+    43 00000039 B00A                        mov al, 10
+    44 0000003B B307                        mov bl, 7
+    45 0000003D F6E3                        mul bl                     ; AX = AL*BL = 70 (AH:AL; DX no es el resultado)
+    46                                  
+    47 0000003F B86400                      mov ax, 100
+    48 00000042 B307                        mov bl, 7
+    49 00000044 F6F3                        div bl                     ; AL = cociente 14; AH = resto 2
+    50                                  
+    51                                  ; BLOQUE 3 — lógica, pruebas de bits y desplazamientos
+    52 00000046 B0B7                        mov al, 0B7h
+    53                                  prueba_and:
+    54 00000048 2206[0800]                  and al, [mascara]          ; AL=07h: conserva los cuatro bits bajos
+    55                                  
+    56 0000004C B0B7                        mov al, 0B7h
+    57 0000004E 0CF0                        or al, 0F0h                ; AL=F7h: activa los cuatro bits altos
+    58                                  
+    59 00000050 B0AA                        mov al, 0AAh
+    60 00000052 34FF                        xor al, 0FFh               ; AL=55h: inversión de los bits
+    61 00000054 31DB                        xor bx, bx                 ; BX=0
+    62                                  
+    63 00000056 B0B7                        mov al, 0B7h
+    64                                  prueba_test:
+    65 00000058 A801                        test al, 01h               ; AL no cambia; ZF=0 porque bit 0 está activo
+    66                                  
+    67 0000005A B008                        mov al, 08h
+    68 0000005C C0E002                      shl al, 2                  ; AL=20h (8 × 4)
+    69 0000005F D0E8                        shr al, 1                  ; AL=10h (32 / 2)
+    70                                  
+    71                                  ; BLOQUE 4 — decisión condicional y bucle contado
+    72                                  bloque_control:
+    73 00000061 A1[0200]                    mov ax, [valor_a]
+    74                                  prueba_cmp:
+    75 00000064 3B06[0400]                  cmp ax, [valor_b]          ; 45 > 12: JG toma el salto
+    76 00000068 7F06                        jg .mayor
+    77 0000006A 7409                        je .igual
+    78 0000006C 31C9                        xor cx, cx                 ; caso menor
+    79 0000006E EB08                        jmp .fin_comparacion
+    80                                  .mayor:
+    81 00000070 B90100                      mov cx, 1
+    82 00000073 EB03                        jmp .fin_comparacion
+    83                                  .igual:
+    84 00000075 B90200                      mov cx, 2
+    85                                  .fin_comparacion:
+    86                                  
+    87                                  bucle_suma:
+    88 00000078 31C0                        xor ax, ax                 ; acumulador = 0
+    89 0000007A B90500                      mov cx, 5
+    90 0000007D BB0100                      mov bx, 1
+    91                                  .iteracion:
+    92 00000080 01D8                        add ax, bx                 ; AX = 1+2+3+4+5 = 15
+    93 00000082 43                          inc bx
+    94 00000083 E2FB                        loop .iteracion
+    95                                  fin_bucle_suma:
+    96                                  
+    97                                  ; BLOQUE 5 — SHL/SHR descartan; ROL/ROR reinsertan el bit que sale
+    98                                  bloque_rotacion:
+    99 00000085 B081                        mov al, 81h                ; 10000001b
+   100 00000087 88C3                        mov bl, al
+   101 00000089 D0E3                        shl bl, 1                  ; BL=02h, CF=1; bit 7 sale del byte
+   102 0000008B 88C1                        mov cl, al
+   103 0000008D D0C1                        rol cl, 1                  ; CL=03h, CF=1; bit 7 pasa al bit 0
+   104 0000008F 88C2                        mov dl, al
+   105 00000091 D0EA                        shr dl, 1                  ; DL=40h, CF=1; bit 0 se descarta del byte
+   106 00000093 88C7                        mov bh, al
+   107 00000095 D0CF                        ror bh, 1                  ; BH=C0h, CF=1; bit 0 pasa al bit 7
+   108                                  
+   109 00000097 B0A5                        mov al, 0A5h
+   110 00000099 C0C004                      rol al, 4                  ; AL=5Ah: intercambia los dos nibbles
+   111                                  fin_rotacion:
+   112 0000009C CD20                        int 20h

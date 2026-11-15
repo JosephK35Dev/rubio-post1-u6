@@ -1,0 +1,11 @@
+*.tmp
+*.bak
+*.log
+*.wav
+*.avi
+/nasm.exe
+/DEBUG.COM
+/cwsdpmi.exe
+/LAB6*.COM
+/LAB6*.LST
+/dos/
